@@ -88,6 +88,8 @@ For these steps we need to use the [OSS](https://www.nuget.org/packages/Autodesk
 Now there's a tricky part. We either create a new item (v1) or add a new version to an existing item.
 In this sample, we're basically trying the first option, and in case an item with the same name already exists, an error with status 409 is thrown, then we can move to the second option.
 
+`If you use a three-legged token you can take advantage of the [search endpoint](https://aps.autodesk.com/en/docs/data/v2/reference/http/projects-project_id-folders-folder_id-search-GET/)`
+
 7.[Create the first version of the uploaded file](https://aps.autodesk.com/en/docs/data/v2/tutorials/upload-file/#step-7-create-the-first-version-of-the-uploaded-file)
 For this step we need to use the [Data Management](https://www.nuget.org/packages/Autodesk.DataManagement/2.0.0-beta3) library through the `DataManagementClient`.
 
