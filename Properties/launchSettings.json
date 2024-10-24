@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "ConsoleAppACCUpload": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "client_id": "",
+        "client_secret": ""
+      }
+    }
+  }
+}
