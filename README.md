@@ -10,7 +10,8 @@
 
 ## Introduction
 
-This sample demonstrates the steps to upload a file to ACC using the APS .NET SDK
+This sample demonstrates the steps to upload a file to ACC using the APS .NET SDK.
+When running the sample, you'll be prompted to type a project id (prefixed with b.), local file path(without "") and a folder urn.
 
 ## How it works
 
