@@ -28,8 +28,15 @@ namespace ACCUploadApp
 			OssClient _ossClient = new OssClient(sdkManager);
 			TwoLeggedToken twoLeggedToken = _authClient.GetTwoLeggedTokenAsync(client_id, client_secret, new List<Scopes>() { Scopes.DataRead, Scopes.DataWrite, Scopes.DataCreate }).GetAwaiter().GetResult();
 
-			Console.WriteLine("Please write the project id where the file should be uploaded prefixed with b.");
+			Console.WriteLine("Please write the project id where the file should be uploaded prefixed with 'a.' or 'b.'");
 			string project_id = Console.ReadLine();
+			if (project_id.StartsWith("a."))
+			{
+				Console.WriteLine("Please provide 3-legged access token:");
+                string access_token = Console.ReadLine();
+				twoLeggedToken = new TwoLeggedToken();
+				twoLeggedToken.AccessToken = access_token;
+            }
 			Console.WriteLine("Please write the path of the file to be uploaded");
 			string file_path = Console.ReadLine();
 			string file_name = Path.GetFileName(file_path);
@@ -57,7 +64,7 @@ namespace ACCUploadApp
 				//If there's a conflict, it means there's already an item with the same name, then we update its version
 				if (ex.HttpResponseMessage.StatusCode == HttpStatusCode.Conflict)
 				{
-          Console.WriteLine("One item with this name already exists! Creating a new version...");
+					Console.WriteLine("One item with this name already exists! Creating a new version...");
 					string item_id = GetItemId(_dmClient, twoLeggedToken,project_id, folder_id, file_name);
 					CreateNewVersion(_dmClient, twoLeggedToken, project_id, file_name, storage, item_id);
 					Console.WriteLine("Version Created!");
@@ -68,7 +75,13 @@ namespace ACCUploadApp
 
 		private static string GetItemId(DataManagementClient _dmClient, TwoLeggedToken twoLeggedToken, string project_id, string folder_id, string file_name)
 		{
-			List<string> filterExtensionType = new List<string>() { "items:autodesk.bim360:File" };
+			var itemType = "items:autodesk.bim360:File";
+			if (project_id.StartsWith("a."))
+			{
+				itemType = "items:autodesk.core:File";
+            }
+
+            List<string> filterExtensionType = new List<string>() { itemType };
 			FolderContents folderContents = _dmClient.GetFolderContentsAsync(project_id, folder_id, accessToken:twoLeggedToken.AccessToken, filterExtensionType: filterExtensionType).GetAwaiter().GetResult();
 			List<FolderContentsData> matchingItems = folderContents.Data.Where(d => d.Attributes.DisplayName == file_name).ToList();
 			int pageNumber = 0;
@@ -167,7 +180,15 @@ namespace ACCUploadApp
 
 		private static Item CreateNewItem(DataManagementClient _dmClient, TwoLeggedToken twoLeggedToken, string project_id, string file_name, string folder_id, Storage storage)
 		{
-			ItemPayload itemPayload = new ItemPayload()
+			var itemType = Autodesk.DataManagement.Model.Type.ItemsautodeskBim360File;
+			var versionType = Autodesk.DataManagement.Model.Type.VersionsautodeskBim360File;
+			if (project_id.StartsWith("a.")) 
+			{
+				itemType = Autodesk.DataManagement.Model.Type.ItemsautodeskCoreFile;
+				versionType = Autodesk.DataManagement.Model.Type.VersionsautodeskCoreFile;
+			}
+
+            ItemPayload itemPayload = new ItemPayload()
 			{
 				Jsonapi = new ModifyFolderPayloadJsonapi()
 				{
@@ -181,7 +202,7 @@ namespace ACCUploadApp
 						DisplayName = file_name,
 						Extension = new ItemPayloadDataAttributesExtension()
 						{
-							Type = Autodesk.DataManagement.Model.Type.ItemsautodeskBim360File,
+							Type = itemType,
 							_Version = VersionNumber._10
 						}
 					},
@@ -216,7 +237,7 @@ namespace ACCUploadApp
 												Name = file_name,
 												Extension = new ItemPayloadDataAttributesExtension()
 												{
-														Type = Autodesk.DataManagement.Model.Type.VersionsautodeskBim360File,
+														Type = versionType,
 														_Version = VersionNumber._10
 												}
 										},
