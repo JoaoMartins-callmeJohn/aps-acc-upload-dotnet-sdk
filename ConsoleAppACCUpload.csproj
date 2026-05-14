@@ -8,9 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Autodesk.Authentication" Version="1.0.0" />
-    <PackageReference Include="Autodesk.DataManagement" Version="1.0.0" />
-    <PackageReference Include="Autodesk.Oss" Version="1.1.1" />
+    <PackageReference Include="Autodesk.Authentication" Version="2.0.1" />
+    <PackageReference Include="Autodesk.DataManagement" Version="2.1.3" />
+    <PackageReference Include="Autodesk.Oss" Version="2.3.3" />
   </ItemGroup>
 
 </Project>

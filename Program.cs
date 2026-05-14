@@ -56,7 +56,7 @@ namespace ACCUploadApp
 
 			try
 			{
-				Item newItem = CreateNewItem(_dmClient, twoLeggedToken, project_id, file_name, folder_id, storage);
+				CreatedItem newItem = CreateNewItem(_dmClient, twoLeggedToken, project_id, file_name, folder_id, storage);
 				Console.WriteLine(newItem.ToString());
 			}
 			catch (DataManagementApiException ex)
@@ -83,12 +83,12 @@ namespace ACCUploadApp
 
             List<string> filterExtensionType = new List<string>() { itemType };
 			FolderContents folderContents = _dmClient.GetFolderContentsAsync(project_id, folder_id, accessToken:twoLeggedToken.AccessToken, filterExtensionType: filterExtensionType).GetAwaiter().GetResult();
-			List<FolderContentsData> matchingItems = folderContents.Data.Where(d => d.Attributes.DisplayName == file_name).ToList();
+			List<ItemData> matchingItems = folderContents.Data.OfType<ItemData>().Where(d => d.Attributes.DisplayName == file_name).ToList();
 			int pageNumber = 0;
-			while (matchingItems.Count > 0 & !string.IsNullOrEmpty(folderContents.Links.Next?.Href)) {
+			while (matchingItems.Count == 0 && !string.IsNullOrEmpty(folderContents.Links.Next?.Href)) {
 				pageNumber++;
 				folderContents = _dmClient.GetFolderContentsAsync(project_id, folder_id, accessToken: twoLeggedToken.AccessToken, filterExtensionType: filterExtensionType, pageNumber:pageNumber).GetAwaiter().GetResult();
-				matchingItems = folderContents.Data.Where(d => d.Attributes.DisplayName == file_name).ToList();
+				matchingItems = folderContents.Data.OfType<ItemData>().Where(d => d.Attributes.DisplayName == file_name).ToList();
 			}
 			return matchingItems.First().Id;
 		}
@@ -97,24 +97,24 @@ namespace ACCUploadApp
 		{
 			StoragePayload payload = new StoragePayload()
 			{
-				Jsonapi = new ModifyFolderPayloadJsonapi()
+				Jsonapi = new JsonApiVersion()
 				{
-					_Version = VersionNumber._10
+					VarVersion = JsonApiVersionValue._10
 				},
 				Data = new StoragePayloadData()
 				{
-					Type = Autodesk.DataManagement.Model.Type.Objects,
+					Type = TypeObject.Objects,
 					Attributes = new StoragePayloadDataAttributes()
 					{
 						Name = file_name,
 					},
 					Relationships = new StoragePayloadDataRelationships()
 					{
-						Target = new ModifyFolderPayloadDataRelationshipsParent()
+						Target = new StoragePayloadDataRelationshipsTarget()
 						{
-							Data = new ModifyFolderPayloadDataRelationshipsParentData()
+							Data = new StoragePayloadDataRelationshipsTargetData()
 							{
-								Type = Autodesk.DataManagement.Model.Type.Folders,
+								Type = TypeFolderItemsForStorage.Folders,
 								Id = folder_id,
 							}
 						}
@@ -129,45 +129,51 @@ namespace ACCUploadApp
 		{
 			using (FileStream fileStream = new FileStream(file_path, FileMode.Open, FileAccess.Read))
 			{
-				_ossClient.Upload(bucket_key, object_key, fileStream, accessToken: twoLeggedToken.AccessToken, CancellationToken.None).GetAwaiter().GetResult();
+				_ossClient.UploadObjectAsync(bucket_key, object_key, fileStream, cancellationToken: CancellationToken.None, accessToken: twoLeggedToken.AccessToken).GetAwaiter().GetResult();
 			}
 		}
 
 		private static void CreateNewVersion(DataManagementClient _dmClient, TwoLeggedToken twoLeggedToken, string project_id, string file_name, Storage storage, string item_id)
 		{
+			var versionType = "versions:autodesk.bim360:File";
+			if (project_id.StartsWith("a."))
+			{
+				versionType = "versions:autodesk.core:File";
+			}
+
 			VersionPayload versionPayload = new VersionPayload()
 			{
-				Jsonapi = new ModifyFolderPayloadJsonapi()
+				Jsonapi = new JsonApiVersion()
 				{
-					_Version = VersionNumber._10
+					VarVersion = JsonApiVersionValue._10
 				},
 				Data = new VersionPayloadData()
 				{
-					Type = Autodesk.DataManagement.Model.Type.Versions,
+					Type = TypeVersion.Versions,
 					Attributes = new VersionPayloadDataAttributes()
 					{
 						Name = file_name,
-						Extension = new RelationshipRefsPayloadDataMetaExtension()
+						Extension = new VersionPayloadDataAttributesExtension()
 						{
-							Type = Autodesk.DataManagement.Model.Type.VersionsautodeskBim360File,
-							_Version = VersionNumber._10
+							Type = versionType,
+							VarVersion = "1.0"
 						}
 					},
 					Relationships = new VersionPayloadDataRelationships()
 					{
-						Item = new FolderPayloadDataRelationshipsParent()
+						Item = new VersionPayloadDataRelationshipsItem()
 						{
-							Data = new FolderPayloadDataRelationshipsParentData()
+							Data = new VersionPayloadDataRelationshipsItemData()
 							{
-								Type = Autodesk.DataManagement.Model.Type.Items,
+								Type = TypeItem.Items,
 								Id = item_id
 							}
 						},
-						Storage = new FolderPayloadDataRelationshipsParent()
+						Storage = new VersionPayloadDataRelationshipsStorage()
 						{
-							Data = new FolderPayloadDataRelationshipsParentData()
+							Data = new VersionPayloadDataRelationshipsStorageData()
 							{
-								Type = Autodesk.DataManagement.Model.Type.Objects,
+								Type = TypeObject.Objects,
 								Id = storage.Data.Id,
 							}
 						}
@@ -175,52 +181,52 @@ namespace ACCUploadApp
 				}
 			};
 			Console.WriteLine(versionPayload.ToString()); 
-			ModelVersion newVersion = _dmClient.CreateVersionAsync(project_id, versionPayload: versionPayload, accessToken: twoLeggedToken.AccessToken).GetAwaiter().GetResult();
+			_dmClient.CreateVersionAsync(project_id, versionPayload: versionPayload, accessToken: twoLeggedToken.AccessToken).GetAwaiter().GetResult();
 		}
 
-		private static Item CreateNewItem(DataManagementClient _dmClient, TwoLeggedToken twoLeggedToken, string project_id, string file_name, string folder_id, Storage storage)
+		private static CreatedItem CreateNewItem(DataManagementClient _dmClient, TwoLeggedToken twoLeggedToken, string project_id, string file_name, string folder_id, Storage storage)
 		{
-			var itemType = Autodesk.DataManagement.Model.Type.ItemsautodeskBim360File;
-			var versionType = Autodesk.DataManagement.Model.Type.VersionsautodeskBim360File;
+			var itemType = "items:autodesk.bim360:File";
+			var versionType = "versions:autodesk.bim360:File";
 			if (project_id.StartsWith("a.")) 
 			{
-				itemType = Autodesk.DataManagement.Model.Type.ItemsautodeskCoreFile;
-				versionType = Autodesk.DataManagement.Model.Type.VersionsautodeskCoreFile;
+				itemType = "items:autodesk.core:File";
+				versionType = "versions:autodesk.core:File";
 			}
-
+ 
             ItemPayload itemPayload = new ItemPayload()
 			{
-				Jsonapi = new ModifyFolderPayloadJsonapi()
+				Jsonapi = new JsonApiVersion()
 				{
-					_Version = VersionNumber._10
+					VarVersion = JsonApiVersionValue._10
 				},
 				Data = new ItemPayloadData()
 				{
-					Type = Autodesk.DataManagement.Model.Type.Items,
+					Type = TypeItem.Items,
 					Attributes = new ItemPayloadDataAttributes()
 					{
 						DisplayName = file_name,
 						Extension = new ItemPayloadDataAttributesExtension()
 						{
 							Type = itemType,
-							_Version = VersionNumber._10
+							VarVersion = "1.0"
 						}
 					},
 					Relationships = new ItemPayloadDataRelationships()
 					{
-						Tip = new FolderPayloadDataRelationshipsParent()
+						Tip = new ItemPayloadDataRelationshipsTip()
 						{
-							Data = new FolderPayloadDataRelationshipsParentData()
+							Data = new ItemPayloadDataRelationshipsTipData()
 							{
-								Type = Autodesk.DataManagement.Model.Type.Versions,
+								Type = TypeVersion.Versions,
 								Id = "1"
 							}
 						},
-						Parent = new FolderPayloadDataRelationshipsParent()
+						Parent = new ItemPayloadDataRelationshipsParent()
 						{
-							Data = new FolderPayloadDataRelationshipsParentData()
+							Data = new ItemPayloadDataRelationshipsParentData()
 							{
-								Type = Autodesk.DataManagement.Model.Type.Folders,
+								Type = TypeFolder.Folders,
 								Id = folder_id
 							}
 						}
@@ -230,24 +236,24 @@ namespace ACCUploadApp
 						{
 								new ItemPayloadIncluded()
 								{
-										Type = Autodesk.DataManagement.Model.Type.Versions,
+										Type = TypeVersion.Versions,
 										Id = "1",
 										Attributes = new ItemPayloadIncludedAttributes()
 										{
 												Name = file_name,
-												Extension = new ItemPayloadDataAttributesExtension()
+												Extension = new ItemPayloadIncludedAttributesExtension()
 												{
 														Type = versionType,
-														_Version = VersionNumber._10
+														VarVersion = "1.0"
 												}
 										},
 										Relationships = new ItemPayloadIncludedRelationships()
 										{
-											Storage = new FolderPayloadDataRelationshipsParent()
+											Storage = new ItemPayloadIncludedRelationshipsStorage()
 											{
-												Data = new FolderPayloadDataRelationshipsParentData()
+												Data = new ItemPayloadIncludedRelationshipsStorageData()
 												{
-													Type = Autodesk.DataManagement.Model.Type.Objects,
+													Type = TypeObject.Objects,
 													Id = storage.Data.Id,
 												}
 											}
@@ -255,7 +261,7 @@ namespace ACCUploadApp
 								}
 						}
 			};
-			Item newItem = _dmClient.CreateItemAsync(project_id, itemPayload: itemPayload, accessToken: twoLeggedToken.AccessToken).GetAwaiter().GetResult();
+			CreatedItem newItem = _dmClient.CreateItemAsync(project_id, itemPayload: itemPayload, accessToken: twoLeggedToken.AccessToken).GetAwaiter().GetResult();
 			return newItem;
 		}
 	}
