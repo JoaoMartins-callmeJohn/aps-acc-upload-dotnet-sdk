@@ -38,8 +38,8 @@ namespace ACCUploadApp
 				twoLeggedToken.AccessToken = access_token;
             }
 			Console.WriteLine("Please write the path of the file to be uploaded");
-			string file_path = Console.ReadLine();
-			string file_name = Path.GetFileName(file_path);
+			string file_path = Console.ReadLine().Trim().Trim('"');
+			string file_name = SanitizeFileName(Path.GetFileName(file_path));
 			Console.WriteLine("Please write the folder id where the file should be uploaded");
 			string folder_id = Console.ReadLine();
 
@@ -57,7 +57,7 @@ namespace ACCUploadApp
 			try
 			{
 				CreatedItem newItem = CreateNewItem(_dmClient, twoLeggedToken, project_id, file_name, folder_id, storage);
-				Console.WriteLine(newItem.ToString());
+				Console.WriteLine($"File \"{file_name}\" uploaded successfully! Item id: {newItem.Data.Id}");
 			}
 			catch (DataManagementApiException ex)
 			{
@@ -67,10 +67,32 @@ namespace ACCUploadApp
 					Console.WriteLine("One item with this name already exists! Creating a new version...");
 					string item_id = GetItemId(_dmClient, twoLeggedToken,project_id, folder_id, file_name);
 					CreateNewVersion(_dmClient, twoLeggedToken, project_id, file_name, storage, item_id);
-					Console.WriteLine("Version Created!");
+					Console.WriteLine($"File \"{file_name}\" uploaded successfully as a new version!");
 				}
 			}
 			Console.ReadKey();
+		}
+
+		/// <summary>
+		/// ACC rejects file names that contain characters outside of its allowed set.
+		/// Disallowed: \ / : * ? " &lt; &gt; | # % &amp; { } ~ and leading/trailing spaces or dots.
+		/// </summary>
+		private static string SanitizeFileName(string fileName)
+		{
+			// Characters explicitly rejected by the ACC Data Management API
+			char[] invalidChars = { '\\', '/', ':', '*', '?', '"', '<', '>', '|', '#', '%', '&', '{', '}', '~' };
+			string sanitized = string.Concat(fileName.Split(invalidChars));
+			sanitized = sanitized.Trim().TrimEnd('.');
+
+			if (sanitized != fileName)
+			{
+				Console.WriteLine($"Warning: file name contained invalid characters and was sanitized from \"{fileName}\" to \"{sanitized}\".");
+			}
+
+			if (string.IsNullOrWhiteSpace(sanitized))
+				throw new ArgumentException($"File name \"{fileName}\" consists entirely of invalid characters and cannot be used.");
+
+			return sanitized;
 		}
 
 		private static string GetItemId(DataManagementClient _dmClient, TwoLeggedToken twoLeggedToken, string project_id, string folder_id, string file_name)
